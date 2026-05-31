@@ -11,7 +11,15 @@
     "benefits": "Full tuition + monthly stipend ₱7,000",
     "core_values": "Excellence in science and technology, service to the nation, innovation for Filipino communities",
     "essay_prompt": "Describe how you plan to use science and technology to contribute to Philippine development.",
-    "link": "https://sei.dost.gov.ph"
+    "link": "https://sei.dost.gov.ph",
+    "requires_stem": true,
+    "requires_filipino_citizen": true,
+    "need_based": false,
+    "income_threshold": null,
+    "school_type_required": null,
+    "enrollment_status_required": ["incoming", "enrolled"],
+    "regions_allowed": ["all"],
+    "prohibits_double_grant": true
   },
   {
     "id": "ched-unifast",
@@ -25,7 +33,15 @@
     "benefits": "Tuition subsidy up to ₱40,000/year",
     "core_values": "Equity in access to quality education for all Filipinos regardless of income",
     "essay_prompt": "How has financial constraint affected your education, and how will this subsidy help you reach your goals?",
-    "link": "https://unifast.gov.ph"
+    "link": "https://unifast.gov.ph",
+    "requires_stem": false,
+    "requires_filipino_citizen": true,
+    "need_based": true,
+    "income_threshold": 60000,
+    "school_type_required": null,
+    "enrollment_status_required": ["incoming", "enrolled"],
+    "regions_allowed": ["all"],
+    "prohibits_double_grant": false
   },
   {
     "id": "sm-foundation-it",
@@ -39,7 +55,15 @@
     "benefits": "Full tuition + allowance + laptop grant",
     "core_values": "Leadership, community service, perseverance, and giving back to Filipino communities",
     "essay_prompt": "Describe a time you demonstrated leadership in your community or school and how IT can be a tool for social good.",
-    "link": "https://smfoundation.org.ph"
+    "link": "https://smfoundation.org.ph",
+    "requires_stem": true,
+    "requires_filipino_citizen": true,
+    "need_based": true,
+    "income_threshold": 30000,
+    "school_type_required": null,
+    "enrollment_status_required": ["incoming", "enrolled"],
+    "regions_allowed": ["all"],
+    "prohibits_double_grant": true
   },
   {
     "id": "apc-academic-excellence",
@@ -53,7 +77,15 @@
     "benefits": "50–100% tuition discount based on academic ranking",
     "core_values": "Innovation, academic excellence, industry-readiness, and technology leadership",
     "essay_prompt": "How do you embody APC's vision of producing industry-ready IT professionals who lead with innovation?",
-    "link": "https://apc.edu.ph"
+    "link": "https://apc.edu.ph",
+    "requires_stem": false,
+    "requires_filipino_citizen": false,
+    "need_based": false,
+    "income_threshold": null,
+    "school_type_required": "private",
+    "enrollment_status_required": ["incoming", "enrolled"],
+    "regions_allowed": ["NCR"],
+    "prohibits_double_grant": false
   },
   {
     "id": "apc-leadership",
@@ -67,7 +99,15 @@
     "benefits": "25–50% tuition discount",
     "core_values": "Student leadership, volunteerism, and active contribution to the APC community",
     "essay_prompt": "Describe your leadership roles and community involvement and how you plan to continue serving the APC community.",
-    "link": "https://apc.edu.ph"
+    "link": "https://apc.edu.ph",
+    "requires_stem": false,
+    "requires_filipino_citizen": false,
+    "need_based": false,
+    "income_threshold": null,
+    "school_type_required": "private",
+    "enrollment_status_required": ["incoming", "enrolled"],
+    "regions_allowed": ["NCR"],
+    "prohibits_double_grant": false
   },
   {
     "id": "chevening",
@@ -81,7 +121,15 @@
     "benefits": "Full funding: tuition, living allowance, flights, visa — UK universities",
     "core_values": "Leadership potential, networking, creating positive change in home country",
     "essay_prompt": "Demonstrate your leadership qualities and explain how a UK master's degree will help you make a difference in the Philippines.",
-    "link": "https://chevening.org"
+    "link": "https://chevening.org",
+    "requires_stem": false,
+    "requires_filipino_citizen": true,
+    "need_based": false,
+    "income_threshold": null,
+    "school_type_required": null,
+    "enrollment_status_required": ["graduate applicant"],
+    "regions_allowed": ["all"],
+    "prohibits_double_grant": false
   },
   {
     "id": "daad",
@@ -95,7 +143,15 @@
     "benefits": "Full funding for master's degree in Germany",
     "core_values": "Technical excellence, sustainable development, international cooperation",
     "essay_prompt": "How will your postgraduate studies in Germany contribute to sustainable development in the Philippines?",
-    "link": "https://daad.de"
+    "link": "https://daad.de",
+    "requires_stem": true,
+    "requires_filipino_citizen": false,
+    "need_based": false,
+    "income_threshold": null,
+    "school_type_required": null,
+    "enrollment_status_required": ["graduate applicant"],
+    "regions_allowed": ["all"],
+    "prohibits_double_grant": false
   },
   {
     "id": "jasso",
@@ -109,6 +165,14 @@
     "benefits": "Monthly stipend ¥80,000 for exchange studies in Japan",
     "core_values": "Cross-cultural understanding, academic excellence, Japan-Philippines friendship",
     "essay_prompt": "Why do you want to study in Japan and how will this experience enrich both your academic and personal growth?",
-    "link": "https://jasso.or.jp"
+    "link": "https://jasso.or.jp",
+    "requires_stem": false,
+    "requires_filipino_citizen": false,
+    "need_based": false,
+    "income_threshold": null,
+    "school_type_required": null,
+    "enrollment_status_required": ["incoming", "enrolled", "graduate applicant"],
+    "regions_allowed": ["all"],
+    "prohibits_double_grant": false
   }
 ]
