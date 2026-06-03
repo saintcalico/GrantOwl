@@ -4,13 +4,21 @@ import os
 import plotly.graph_objects as go
 from datetime import datetime
 from openai import OpenAI
-from agents.extractor import extract_profile
+from agents.extractor import (
+    extract_from_form,
+    extract_from_resume_pdf,
+    extract_from_resume_image,
+)
 from agents.matcher import match_scholarships
+from agents.explainer import (
+    generate_match_rationale,
+    generate_application_tips,
+)
 from agents.timeline import generate_timeline, generate_application_steps
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Scholarship Copilot",
+    page_title="Iskolar.AI",
     page_icon="🎓",
     layout="wide"
 )
@@ -31,18 +39,20 @@ if not api_key:
     st.stop()
 
 # ── Session state ──────────────────────────────────────────────────────────────
-if "profile" not in st.session_state:
-    st.session_state.profile = None
-if "matches" not in st.session_state:
-    st.session_state.matches = []
-if "match_source" not in st.session_state:
-    st.session_state.match_source = None
-if "selected_scholarship" not in st.session_state:
-    st.session_state.selected_scholarship = None
-if "step" not in st.session_state:
-    st.session_state.step = 1
+defaults = {
+    "profile": None,
+    "matches": [],
+    "match_source": None,
+    "selected_scholarship": None,
+    "rationale": None,
+    "tips": None,
+    "step": 1,
+}
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-# ── Loaders ────────────────────────────────────────────────────────────────────
+# ── Clients ────────────────────────────────────────────────────────────────────
 @st.cache_resource
 def get_client():
     return OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
@@ -52,6 +62,7 @@ def load_scholarships():
     with open("data/scholarships.json", "r") as f:
         return json.load(f)
 
+client = get_client()
 scholarships = load_scholarships()
 
 # ── Progress indicator ─────────────────────────────────────────────────────────
@@ -62,18 +73,18 @@ STEPS = {
     4: "📋 Action Plan",
 }
 
-st.title("🎓 Scholarship Copilot")
+st.title("🎓 Iskolar.AI")
 st.caption(
-    "Your AI-powered grant and application assistant "
+    "Your AI-powered scholarship adviser "
     "— session only, nothing is saved."
 )
 
 progress_value = (st.session_state.step - 1) / (len(STEPS) - 1)
 st.progress(progress_value)
 
-cols = st.columns(len(STEPS))
+step_cols = st.columns(len(STEPS))
 for i, (num, label) in enumerate(STEPS.items()):
-    with cols[i]:
+    with step_cols[i]:
         if num < st.session_state.step:
             st.markdown(
                 f"<p style='text-align:center;color:#6C63FF;'>"
@@ -95,287 +106,515 @@ for i, (num, label) in enumerate(STEPS.items()):
 
 st.divider()
 
-# ── STEP 1: Expanded structured form ──────────────────────────────────────────
+# ── STEP 1: Input layer ────────────────────────────────────────────────────────
 with st.expander(
     "Step 1 — Tell us about yourself",
-    expanded=(st.session_state.step == 1)
+    expanded=(st.session_state.step == 1),
 ):
-    st.markdown(
-        "Fill in all sections so the agent can find your most "
-        "specific matches."
+    # Level selector
+    level_seeking_label = st.selectbox(
+        "I am applying for a scholarship for:",
+        ["Undergraduate studies", "Graduate studies"],
     )
+    is_graduate = level_seeking_label == "Graduate studies"
+    level_seeking = "graduate" if is_graduate else "undergraduate"
 
-    # ── Section A: Personal Information ───────────────────────────────────────
-    st.markdown("#### 🧑 Personal Information")
-    col1, col2 = st.columns(2)
-    with col1:
-        name = st.text_input(
-            "Full name", placeholder="Juan dela Cruz"
-        )
-        school = st.text_input(
-            "School / University",
-            placeholder="Asia Pacific College"
-        )
-        school_type = st.selectbox(
-            "School type",
-            ["", "Private", "Public", "State University (SUC)"],
-        )
-    with col2:
-        is_filipino_citizen = st.toggle(
-            "I am a Filipino citizen", value=True
-        )
-        region = st.selectbox(
-            "Region",
+    if is_graduate:
+        input_method = st.radio(
+            "How would you like to provide your information?",
             [
-                "",
-                "NCR (Metro Manila)",
-                "Region I (Ilocos)",
-                "Region II (Cagayan Valley)",
-                "Region III (Central Luzon)",
-                "Region IV-A (CALABARZON)",
-                "Region IV-B (MIMAROPA)",
-                "Region V (Bicol)",
-                "Region VI (Western Visayas)",
-                "Region VII (Central Visayas)",
-                "Region VIII (Eastern Visayas)",
-                "Region IX (Zamboanga Peninsula)",
-                "Region X (Northern Mindanao)",
-                "Region XI (Davao)",
-                "Region XII (SOCCSKSARGEN)",
-                "Region XIII (Caraga)",
-                "BARMM",
-                "CAR (Cordillera)",
+                "📄 Upload my resume (PDF or image)",
+                "📝 Fill a structured form",
             ],
+            horizontal=True,
         )
-        city = st.text_input(
-            "City / Municipality",
-            placeholder="e.g. Pasay City"
-        )
+    else:
+        input_method = "📝 Fill a structured form"
 
     st.divider()
 
-    # ── Section B: Academic Information ───────────────────────────────────────
-    st.markdown("#### 📚 Academic Information")
-    col3, col4 = st.columns(2)
-    with col3:
-        program_track = st.selectbox(
-            "Program track",
-            ["", "STEM", "Business", "Arts & Humanities",
-             "Education", "Health Sciences"],
-        )
-        major = st.text_input(
-            "Degree / Major",
-            placeholder="BS Information Technology"
-        )
-        level_seeking = st.selectbox(
-            "Scholarship level",
-            ["undergraduate", "graduate"],
-        )
-    with col4:
-        year_level = st.selectbox(
-            "Year level",
-            ["", "1st Year", "2nd Year", "3rd Year",
-             "4th Year", "Graduate"],
-        )
-        enrollment_status = st.selectbox(
-            "Enrollment status",
-            [
-                "Currently Enrolled",
-                "Incoming Freshman",
-                "Graduating",
-                "Graduate Applicant",
-            ],
-        )
-        gpa_input = st.number_input(
-            "GPA (100-point scale)",
-            min_value=0.0,
-            max_value=100.0,
-            value=0.0,
-            step=0.1,
-            format="%.2f",
-        )
-        gpa = gpa_input if gpa_input > 0 else None
-
-    st.divider()
-
-    # ── Section C: Financial Information ──────────────────────────────────────
-    st.markdown("#### 💰 Financial Information")
-    st.caption(
-        "This is used only to match need-based scholarships. "
-        "Nothing is stored."
-    )
-    col5, col6 = st.columns(2)
-    with col5:
-        income_bracket = st.selectbox(
-            "Monthly household income",
-            [
-                "",
-                "Below ₱15,000",
-                "₱15,000 – ₱30,000",
-                "₱30,000 – ₱60,000",
-                "Above ₱60,000",
-            ],
-        )
-    with col6:
-        has_existing_scholarship = st.toggle(
-            "I currently have an active scholarship", value=False
+    # ── Resume upload path (graduate only) ────────────────────────────────────
+    if (
+        is_graduate
+        and input_method == "📄 Upload my resume (PDF or image)"
+    ):
+        st.markdown("#### 📄 Resume Upload")
+        st.caption(
+            "Upload your undergraduate resume or CV. "
+            "Accepted: PDF, JPG, PNG. "
+            "Your file is sent to OpenAI for extraction only — "
+            "nothing is stored."
         )
 
-    st.divider()
-
-    # ── Section D: Skills ──────────────────────────────────────────────────────
-    st.markdown("#### 💻 Technical Skills")
-    st.caption("Select all that apply.")
-    skill_options = [
-        "Python", "JavaScript", "React", "Node.js", "Java",
-        "SQL", "HTML/CSS", "C/C++", "PHP", "Machine Learning",
-        "Data Analysis", "Mobile Development", "Cloud Computing",
-        "Cybersecurity", "UI/UX Design",
-    ]
-    selected_skills = st.multiselect(
-        "Skills",
-        skill_options,
-        placeholder="Choose your skills..."
-    )
-    other_skills = st.text_input(
-        "Other skills not listed above",
-        placeholder="e.g. Flutter, Docker, Figma"
-    )
-
-    st.divider()
-
-    # ── Section E: Leadership & Extracurricular ────────────────────────────────
-    st.markdown("#### 🏆 Leadership & Extracurricular")
-    col7, col8 = st.columns(2)
-    with col7:
-        leadership_roles = st.multiselect(
-            "Leadership roles",
-            [
-                "Student Organization Officer",
-                "Class Officer",
-                "Athlete (varsity)",
-                "Volunteer / Community Worker",
-                "Event Organizer",
-                "None",
-            ],
-            placeholder="Select your roles..."
+        uploaded_file = st.file_uploader(
+            "Upload your resume",
+            type=["pdf", "jpg", "jpeg", "png"],
+            help="PDF recommended for best extraction accuracy.",
         )
-        leadership_text = st.text_area(
-            "Describe your leadership or community involvement",
+
+        if uploaded_file:
+            st.success(
+                f"✅ {uploaded_file.name} "
+                f"({uploaded_file.size // 1024} KB)"
+            )
+
+            if st.button(
+                "🔍 Extract my profile from resume",
+                type="primary",
+            ):
+                file_bytes = uploaded_file.read()
+                file_type = uploaded_file.type
+
+                with st.spinner(
+                    "Reading your resume and extracting "
+                    "your profile..."
+                ):
+                    if file_type == "application/pdf":
+                        profile = extract_from_resume_pdf(
+                            file_bytes,
+                            client,
+                            level_override=level_seeking,
+                        )
+                    else:
+                        profile = extract_from_resume_image(
+                            file_bytes,
+                            file_type,
+                            client,
+                            level_override=level_seeking,
+                        )
+
+                if "error" in profile:
+                    st.error(f"❌ {profile['error']}")
+                else:
+                    st.session_state.profile = profile
+                    with st.spinner(
+                        "Searching for your best "
+                        "scholarship matches..."
+                    ):
+                        results, source = match_scholarships(
+                            st.session_state.profile,
+                            scholarships,
+                            client,
+                        )
+                        st.session_state.matches = results
+                        st.session_state.match_source = source
+                    st.session_state.step = 2
+                    st.rerun()
+
+    # ── Structured form path ───────────────────────────────────────────────────
+    else:
+        st.markdown(
+            "Fill in the sections below. The more detail you "
+            "provide, the more specific your matches will be."
+        )
+
+        # ── Section A: Personal Information ───────────────────────────────────
+        st.markdown("#### 🧑 Personal Information")
+        col1, col2 = st.columns(2)
+        with col1:
+            name = st.text_input(
+                "Full name", placeholder="Juan dela Cruz"
+            )
+            school = st.text_input(
+                "School / University",
+                placeholder="Asia Pacific College",
+            )
+            school_type = st.selectbox(
+                "School type",
+                [
+                    "",
+                    "Private",
+                    "Public",
+                    "State University (SUC)",
+                ],
+            )
+        with col2:
+            is_filipino_citizen = st.toggle(
+                "I am a Filipino citizen", value=True
+            )
+            region = st.selectbox(
+                "Region",
+                [
+                    "",
+                    "NCR (Metro Manila)",
+                    "Region I (Ilocos)",
+                    "Region II (Cagayan Valley)",
+                    "Region III (Central Luzon)",
+                    "Region IV-A (CALABARZON)",
+                    "Region IV-B (MIMAROPA)",
+                    "Region V (Bicol)",
+                    "Region VI (Western Visayas)",
+                    "Region VII (Central Visayas)",
+                    "Region VIII (Eastern Visayas)",
+                    "Region IX (Zamboanga Peninsula)",
+                    "Region X (Northern Mindanao)",
+                    "Region XI (Davao)",
+                    "Region XII (SOCCSKSARGEN)",
+                    "Region XIII (Caraga)",
+                    "BARMM",
+                    "CAR (Cordillera)",
+                ],
+            )
+            city = st.text_input(
+                "City / Municipality",
+                placeholder="e.g. Pasay City",
+            )
+
+        st.divider()
+
+        # ── Section B: Academic Information ───────────────────────────────────
+        st.markdown("#### 📚 Academic Information")
+        col3, col4 = st.columns(2)
+        with col3:
+            program_track = st.selectbox(
+                "Program track",
+                [
+                    "",
+                    "STEM",
+                    "Business",
+                    "Arts & Humanities",
+                    "Education",
+                    "Health Sciences",
+                ],
+            )
+            major = st.text_input(
+                "Degree / Major",
+                placeholder=(
+                    "BS Information Technology"
+                    if not is_graduate
+                    else "MS Computer Science"
+                ),
+            )
+        with col4:
+            if not is_graduate:
+                year_level = st.selectbox(
+                    "Year level",
+                    [
+                        "",
+                        "1st Year",
+                        "2nd Year",
+                        "3rd Year",
+                        "4th Year",
+                    ],
+                )
+                enrollment_status = st.selectbox(
+                    "Enrollment status",
+                    [
+                        "Currently Enrolled",
+                        "Incoming Freshman",
+                        "Graduating",
+                    ],
+                )
+            else:
+                year_level = "Graduate"
+                enrollment_status = "Graduate Applicant"
+                st.info(
+                    "📌 Graduate applicant — year level "
+                    "set automatically."
+                )
+
+            gpa_input = st.number_input(
+                "GPA (100-point scale)",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.1,
+                format="%.2f",
+            )
+            gpa = gpa_input if gpa_input > 0 else None
+
+        # Graduate-specific fields
+        if is_graduate:
+            st.divider()
+            st.markdown("#### 🎓 Graduate-Specific Information")
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                undergraduate_degree = st.text_input(
+                    "Undergraduate degree completed",
+                    placeholder="BS Information Technology",
+                )
+                thesis_topic = st.text_area(
+                    "Thesis or research topic (if any)",
+                    placeholder=(
+                        "e.g. Machine learning for crop "
+                        "disease detection in the Philippines"
+                    ),
+                    height=80,
+                )
+            with col_g2:
+                work_experience = st.text_area(
+                    "Relevant work experience",
+                    placeholder=(
+                        "e.g. 2 years as software developer "
+                        "at a fintech startup"
+                    ),
+                    height=80,
+                )
+                publications = st.text_input(
+                    "Publications or research papers (if any)",
+                    placeholder=(
+                        "e.g. Published paper in IEEE 2024"
+                    ),
+                )
+
+        st.divider()
+
+        # ── Section C: Financial Information ──────────────────────────────────
+        st.markdown("#### 💰 Financial Information")
+        st.caption(
+            "Used only to match need-based scholarships. "
+            "Nothing is stored."
+        )
+        col5, col6 = st.columns(2)
+        with col5:
+            income_bracket = st.selectbox(
+                "Monthly household income",
+                [
+                    "",
+                    "Below ₱15,000",
+                    "₱15,000 – ₱30,000",
+                    "₱30,000 – ₱60,000",
+                    "Above ₱60,000",
+                ],
+            )
+        with col6:
+            has_existing_scholarship = st.toggle(
+                "I currently have an active scholarship",
+                value=False,
+            )
+
+        st.divider()
+
+        # ── Section D: Household Information ──────────────────────────────────
+        st.markdown("#### 🏠 Household Information")
+        st.caption(
+            "This helps match scholarships that consider "
+            "family context and financial need."
+        )
+
+        col_h1, col_h2 = st.columns(2)
+        with col_h1:
+            household_size = st.number_input(
+                "How many people live in your household? "
+                "(including yourself)",
+                min_value=1,
+                max_value=20,
+                value=1,
+                step=1,
+            )
+        with col_h2:
+            has_pwd_in_household = st.toggle(
+                "There is a PWD (person with disability) "
+                "in my household",
+                value=False,
+            )
+            sibling_has_scholarship = st.toggle(
+                "A sibling currently has an active scholarship",
+                value=False,
+            )
+
+        # Dynamic occupation fields based on household size
+        st.markdown(
+            f"**Occupation of each household member** "
+            f"({int(household_size)} {'person' if household_size == 1 else 'people'})"
+        )
+        st.caption(
+            "Enter the occupation of each person. "
+            "You may write 'Student', 'Unemployed', "
+            "'Retired', etc."
+        )
+
+        household_occupations = []
+        occ_cols = st.columns(min(int(household_size), 3))
+        for idx in range(int(household_size)):
+            col_idx = idx % 3
+            label = (
+                "Your occupation (Person 1 — you)"
+                if idx == 0
+                else f"Person {idx + 1} occupation"
+            )
+            with occ_cols[col_idx]:
+                occ = st.text_input(
+                    label,
+                    placeholder=(
+                        "e.g. Student"
+                        if idx == 0
+                        else "e.g. Farmer, Teacher, Driver..."
+                    ),
+                    key=f"occupation_{idx}",
+                )
+                household_occupations.append(occ)
+
+        st.divider()
+
+        # ── Section E: Skills ──────────────────────────────────────────────────
+        st.markdown("#### 💡 Skills")
+        skills_text = st.text_area(
+            "Do you have any skills you'd like to mention? "
+            "(optional)",
             placeholder=(
-                "e.g. President of IT Student Organization, "
-                "organized inter-school hackathon..."
+                "e.g. I know React, Node.js, and Python. "
+                "I also have experience in UI/UX design "
+                "and data analysis..."
             ),
             height=80,
         )
-    with col8:
-        extracurricular_focus = st.multiselect(
-            "Extracurricular focus",
-            [
-                "Community Service",
-                "Research",
-                "Sports",
-                "Arts & Culture",
-                "Tech Competitions",
-                "Entrepreneurship",
-                "Environmental Advocacy",
-            ],
-            placeholder="Select your focus areas..."
-        )
-        goals = st.selectbox(
-            "Primary scholarship goal",
-            [
-                "",
-                "Fund my undergraduate tuition",
-                "Cover living expenses while studying",
-                "Study abroad for a semester",
-                "Fund a full graduate degree",
-                "Access an international research opportunity",
-            ],
-        )
 
-    st.divider()
+        st.divider()
 
-    if st.button("🔍 Find my scholarships", type="primary"):
-        missing = []
-        if not major.strip():
-            missing.append("Degree / Major")
-        if not program_track:
-            missing.append("Program track")
-        if not year_level:
-            missing.append("Year level")
-        if not region:
-            missing.append("Region")
-        if not goals:
-            missing.append("Primary scholarship goal")
-
-        if missing:
-            st.warning(
-                f"Please fill in: {', '.join(missing)}"
+        # ── Section F: Leadership & Extracurricular ────────────────────────────
+        st.markdown("#### 🏆 Leadership & Extracurricular")
+        col7, col8 = st.columns(2)
+        with col7:
+            leadership_roles = st.multiselect(
+                "Leadership roles",
+                [
+                    "Student Organization Officer",
+                    "Class Officer",
+                    "Athlete (varsity)",
+                    "Volunteer / Community Worker",
+                    "Event Organizer",
+                    "None",
+                ],
+                placeholder="Select your roles...",
             )
-        else:
-            form_data = {
-                "name": name,
-                "school": school,
-                "school_type": school_type,
-                "is_filipino_citizen": is_filipino_citizen,
-                "region": region,
-                "city": city,
-                "year_level": year_level,
-                "level_seeking": level_seeking,
-                "program_track": program_track,
-                "major": major,
-                "gpa": gpa,
-                "enrollment_status": enrollment_status,
-                "income_bracket": income_bracket,
-                "has_existing_scholarship": has_existing_scholarship,
-                "skills": selected_skills,
-                "other_skills": other_skills,
-                "leadership_roles": leadership_roles,
-                "leadership": leadership_text,
-                "extracurricular_focus": extracurricular_focus,
-                "goals": goals,
-            }
+            leadership_text = st.text_area(
+                "Describe your leadership or community involvement",
+                placeholder=(
+                    "e.g. President of IT Student Organization, "
+                    "organized inter-school hackathon..."
+                ),
+                height=80,
+            )
+        with col8:
+            extracurricular_focus = st.multiselect(
+                "Extracurricular focus",
+                [
+                    "Community Service",
+                    "Research",
+                    "Sports",
+                    "Arts & Culture",
+                    "Tech Competitions",
+                    "Entrepreneurship",
+                    "Environmental Advocacy",
+                ],
+                placeholder="Select your focus areas...",
+            )
+            goals = st.selectbox(
+                "Primary scholarship goal",
+                [
+                    "",
+                    "Fund my undergraduate tuition",
+                    "Cover living expenses while studying",
+                    "Study abroad for a semester",
+                    "Fund a full graduate degree",
+                    "Access an international research opportunity",
+                ],
+            )
 
-            with st.spinner(
-                "Applying eligibility filters and searching "
-                "for your best matches..."
-            ):
-                st.session_state.profile = extract_profile(form_data)
+        st.divider()
 
-                if not st.session_state.profile.get("gpa"):
-                    st.warning(
-                        "⚠️ No GPA entered — scholarships with "
-                        "GPA requirements may still appear. "
-                        "Verify eligibility carefully."
+        if st.button("🔍 Find my scholarships", type="primary"):
+            missing = []
+            if not major.strip():
+                missing.append("Degree / Major")
+            if not program_track:
+                missing.append("Program track")
+            if not is_graduate and not year_level:
+                missing.append("Year level")
+            if not region:
+                missing.append("Region")
+            if not goals:
+                missing.append("Primary scholarship goal")
+
+            if missing:
+                st.warning(
+                    f"Please fill in: {', '.join(missing)}"
+                )
+            else:
+                form_data = {
+                    "name": name,
+                    "school": school,
+                    "school_type": school_type,
+                    "is_filipino_citizen": is_filipino_citizen,
+                    "region": region,
+                    "city": city,
+                    "year_level": year_level,
+                    "level_seeking": level_seeking,
+                    "program_track": program_track,
+                    "major": major,
+                    "gpa": gpa,
+                    "enrollment_status": enrollment_status,
+                    "income_bracket": income_bracket,
+                    "has_existing_scholarship": (
+                        has_existing_scholarship
+                    ),
+                    "household_size": int(household_size),
+                    "household_occupations": household_occupations,
+                    "has_pwd_in_household": has_pwd_in_household,
+                    "sibling_has_scholarship": sibling_has_scholarship,
+                    "skills": skills_text,
+                    "leadership_roles": leadership_roles,
+                    "leadership": leadership_text,
+                    "extracurricular_focus": extracurricular_focus,
+                    "goals": goals,
+                    "thesis_topic": (
+                        thesis_topic if is_graduate else None
+                    ),
+                    "work_experience": (
+                        work_experience if is_graduate else None
+                    ),
+                    "publications": (
+                        publications if is_graduate else None
+                    ),
+                    "research_experience": (
+                        thesis_topic if is_graduate else None
+                    ),
+                }
+
+                with st.spinner(
+                    "Applying eligibility filters and searching "
+                    "for your best matches..."
+                ):
+                    st.session_state.profile = extract_from_form(
+                        form_data
                     )
 
-                results, source = match_scholarships(
-                    st.session_state.profile, scholarships
-                )
-                st.session_state.matches = results
-                st.session_state.match_source = source
-                st.session_state.step = 2
-                st.rerun()
+                    if not st.session_state.profile.get("gpa"):
+                        st.warning(
+                            "⚠️ No GPA entered — scholarships with "
+                            "GPA requirements may still appear. "
+                            "Verify eligibility carefully."
+                        )
+
+                    results, source = match_scholarships(
+                        st.session_state.profile,
+                        scholarships,
+                        client,
+                    )
+                    st.session_state.matches = results
+                    st.session_state.match_source = source
+                    st.session_state.step = 2
+                    st.rerun()
 
 # ── STEP 2: Top 3 Matches ──────────────────────────────────────────────────────
 if st.session_state.matches:
     with st.expander(
         "Step 2 — Your top scholarship matches",
-        expanded=(st.session_state.step == 2)
+        expanded=(st.session_state.step == 2),
     ):
         if st.session_state.match_source == "live":
             st.success(
                 "🌐 Live results — sourced from real-time "
-                "web search via Tavily."
+                "web search via Tavily, ranked by AI adviser."
             )
         else:
             st.warning(
                 "📁 Showing curated local results — "
-                "live search unavailable."
+                "live search unavailable. Ranked by AI adviser."
             )
 
-        # ── Comparison bar chart: top 3 side by side ──────────────────────────
+        # Comparison bar chart
         if len(st.session_state.matches) > 1:
             st.markdown("### 📊 How your top matches compare")
             names = [
@@ -384,38 +623,41 @@ if st.session_state.matches:
                 else s["name"]
                 for s in st.session_state.matches
             ]
-            scores = [s["match_score"] for s in st.session_state.matches]
+            scores = [
+                s["match_score"]
+                for s in st.session_state.matches
+            ]
             colors = ["#6C63FF", "#A89CF7", "#D4D0FA"]
 
-            fig_compare = go.Figure(
-                go.Bar(
-                    x=names,
-                    y=scores,
-                    marker_color=colors[:len(names)],
-                    text=scores,
-                    textposition="outside",
-                )
-            )
+            fig_compare = go.Figure(go.Bar(
+                x=names,
+                y=scores,
+                marker_color=colors[:len(names)],
+                text=scores,
+                textposition="outside",
+            ))
             fig_compare.update_layout(
-                yaxis_title="Match Score",
+                yaxis_title="AI Match Score",
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
                 font_color="#FAFAFA",
-                yaxis=dict(range=[0, 10]),
+                yaxis=dict(range=[0, 11]),
                 margin=dict(t=20, b=20),
                 height=300,
             )
             st.plotly_chart(fig_compare, use_container_width=True)
 
         st.markdown(
-            f"Found **{len(st.session_state.matches)}** "
-            f"matches based on your profile:"
+            f"Found **{len(st.session_state.matches)}** matches "
+            f"ranked by your AI adviser:"
         )
 
         for i, s in enumerate(st.session_state.matches):
             score = s["match_score"]
             score_color = (
-                "🟢" if score >= 5 else "🟡" if score >= 3 else "🔴"
+                "🟢" if score >= 7
+                else "🟡" if score >= 4
+                else "🔴"
             )
             badge = "🏅 Best Match" if i == 0 else f"#{i + 1}"
 
@@ -434,13 +676,21 @@ if st.session_state.matches:
                         f"**Why you match:** "
                         f"{' · '.join(s['match_reasons'])}"
                     )
-                    if s.get("link") and s["link"].startswith("http"):
+                    if s.get("adviser_note"):
+                        st.info(
+                            f"💡 **Adviser:** {s['adviser_note']}"
+                        )
+                    if (
+                        s.get("link")
+                        and s["link"].startswith("http")
+                    ):
                         st.markdown(
                             f"[🔗 View scholarship]({s['link']})"
                         )
                 with col2:
                     st.metric(
-                        "Match score", f"{score_color} {score}/8"
+                        "AI Score",
+                        f"{score_color} {score}/10",
                     )
                     if i == 0:
                         if st.button(
@@ -450,11 +700,29 @@ if st.session_state.matches:
                         ):
                             st.session_state.selected_scholarship = s
                             st.session_state.step = 3
+                            with st.spinner(
+                                "Generating your personalized "
+                                "match analysis..."
+                            ):
+                                st.session_state.rationale = (
+                                    generate_match_rationale(
+                                        st.session_state.profile,
+                                        s,
+                                        client,
+                                    )
+                                )
+                                st.session_state.tips = (
+                                    generate_application_tips(
+                                        st.session_state.profile,
+                                        s,
+                                        client,
+                                    )
+                                )
                             st.rerun()
                     else:
                         if st.button(
                             "📋 View action plan",
-                            key=f"action_{i}"
+                            key=f"action_{i}",
                         ):
                             st.session_state.selected_scholarship = s
                             st.session_state.step = 4
@@ -470,74 +738,77 @@ if (
 
     with st.expander(
         "Step 3 — Why this is your best match",
-        expanded=(st.session_state.step == 3)
+        expanded=(st.session_state.step == 3),
     ):
         st.markdown(f"## 🏅 {s['name']}")
         st.caption(f"{s['provider']} · {s['type'].capitalize()}")
+
+        if st.session_state.rationale:
+            st.info(
+                f"💬 **Your AI Adviser says:** "
+                f"{st.session_state.rationale}"
+            )
+
         st.divider()
 
-        # ── Graph 1: Radar chart — profile vs requirements ─────────────────────
-        st.markdown("### 🕸️ Your Profile vs. Scholarship Requirements")
-
+        # Radar chart
+        st.markdown(
+            "### 🕸️ Your Profile vs. Scholarship Requirements"
+        )
         user_gpa = p.get("gpa") or 0
         req_gpa = s.get("gpa_required") or 0
         user_major = (p.get("major") or "").lower()
         majors_lower = [m.lower() for m in s.get("majors", [])]
-        user_skills = p.get("skills") or []
+        user_skills = p.get("skills") or ""
         user_leadership = p.get("leadership_roles") or []
         user_extracurricular = p.get("extracurricular_focus") or []
 
-        # Normalize each dimension to 0–100
         gpa_fit = (
             min((user_gpa / req_gpa) * 100, 100)
             if req_gpa > 0 and user_gpa
             else 80
         )
         major_fit = (
-            100
-            if "all" in majors_lower
-            else 90
-            if any(
+            100 if "all" in majors_lower
+            else 90 if any(
                 user_major in m or m in user_major
                 for m in majors_lower
             )
             else 40
         )
-        skills_fit = min(len(user_skills) * 15, 100)
+        skills_fit = min(len(user_skills.split()) * 10, 100) if user_skills else 20
         leadership_fit = (
-            100
-            if len(user_leadership) >= 2
-            else 60
-            if len(user_leadership) == 1
+            100 if len(user_leadership) >= 2
+            else 60 if len(user_leadership) == 1
             else 20
         )
-        extracurricular_fit = min(len(user_extracurricular) * 25, 100)
+        extracurricular_fit = min(
+            len(user_extracurricular) * 25, 100
+        )
 
-        radar_categories = [
+        radar_cats = [
             "GPA Fit", "Major Fit", "Skills",
-            "Leadership", "Extracurricular"
+            "Leadership", "Extracurricular",
         ]
-        user_values = [
+        user_vals = [
             gpa_fit, major_fit, skills_fit,
-            leadership_fit, extracurricular_fit
+            leadership_fit, extracurricular_fit,
         ]
-        # Close the polygon
-        radar_categories_closed = radar_categories + [radar_categories[0]]
-        user_values_closed = user_values + [user_values[0]]
-        ideal_values_closed = [100, 100, 100, 100, 100, 100]
+        radar_cats_c = radar_cats + [radar_cats[0]]
+        user_vals_c = user_vals + [user_vals[0]]
 
         fig_radar = go.Figure()
         fig_radar.add_trace(go.Scatterpolar(
-            r=ideal_values_closed,
-            theta=radar_categories_closed,
+            r=[100, 100, 100, 100, 100, 100],
+            theta=radar_cats_c,
             fill="toself",
             name="Scholarship Ideal",
             fillcolor="rgba(108,99,255,0.15)",
             line=dict(color="#6C63FF", width=1, dash="dash"),
         ))
         fig_radar.add_trace(go.Scatterpolar(
-            r=user_values_closed,
-            theta=radar_categories_closed,
+            r=user_vals_c,
+            theta=radar_cats_c,
             fill="toself",
             name="Your Profile",
             fillcolor="rgba(108,99,255,0.4)",
@@ -573,16 +844,15 @@ if (
 
         st.divider()
 
-        # ── Graph 2: Horizontal bar — score breakdown ──────────────────────────
+        # Horizontal bar chart
         st.markdown("### 📊 Match Score Breakdown")
-
         criteria_labels = [
             "GPA Fit", "Major Fit", "Skills",
-            "Leadership", "Extracurricular"
+            "Leadership", "Extracurricular",
         ]
         criteria_values = [
             gpa_fit, major_fit, skills_fit,
-            leadership_fit, extracurricular_fit
+            leadership_fit, extracurricular_fit,
         ]
         bar_colors = [
             "#6C63FF" if v >= 70
@@ -590,7 +860,6 @@ if (
             else "#E05C5C"
             for v in criteria_values
         ]
-
         fig_bar = go.Figure(go.Bar(
             x=criteria_values,
             y=criteria_labels,
@@ -612,14 +881,16 @@ if (
 
         st.divider()
 
-        # ── Graph 3: Deadline urgency timeline ────────────────────────────────
+        # Deadline urgency timeline
         st.markdown("### ⏳ Time Until Deadline")
-
         deadline_str = s.get("deadline", "")
         try:
-            deadline_dt = datetime.strptime(deadline_str, "%Y-%m-%d")
-            days_left = (deadline_dt - datetime.now()).days
-            days_left = max(days_left, 0)
+            deadline_dt = datetime.strptime(
+                deadline_str, "%Y-%m-%d"
+            )
+            days_left = max(
+                (deadline_dt - datetime.now()).days, 0
+            )
             total_days = 180
             progress_pct = min(
                 (total_days - days_left) / total_days, 1.0
@@ -634,10 +905,12 @@ if (
                 if days_left < 21
                 else f"🟡 {days_left} days left — Start preparing"
                 if days_left < 42
-                else f"🟢 {days_left} days left — Good time to start"
+                else (
+                    f"🟢 {days_left} days left "
+                    f"— Good time to start"
+                )
             )
-
-            fig_timeline = go.Figure(go.Bar(
+            fig_tl = go.Figure(go.Bar(
                 x=[progress_pct * 100],
                 y=["Deadline"],
                 orientation="h",
@@ -646,7 +919,7 @@ if (
                 textposition="inside",
                 insidetextanchor="middle",
             ))
-            fig_timeline.add_trace(go.Bar(
+            fig_tl.add_trace(go.Bar(
                 x=[(1 - progress_pct) * 100],
                 y=["Deadline"],
                 orientation="h",
@@ -654,10 +927,13 @@ if (
                 showlegend=False,
                 hoverinfo="skip",
             ))
-            fig_timeline.update_layout(
+            fig_tl.update_layout(
                 barmode="stack",
-                xaxis=dict(range=[0, 100], showgrid=False,
-                           showticklabels=False),
+                xaxis=dict(
+                    range=[0, 100],
+                    showgrid=False,
+                    showticklabels=False,
+                ),
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
                 font_color="#FAFAFA",
@@ -665,11 +941,11 @@ if (
                 height=100,
                 showlegend=False,
             )
-            st.plotly_chart(fig_timeline, use_container_width=True)
+            st.plotly_chart(fig_tl, use_container_width=True)
             st.caption(
-                f"Deadline: **{deadline_dt.strftime('%B %d, %Y')}**"
+                f"Deadline: "
+                f"**{deadline_dt.strftime('%B %d, %Y')}**"
             )
-
         except ValueError:
             st.info(
                 "ℹ️ Deadline not available — check the official "
@@ -678,12 +954,10 @@ if (
 
         st.divider()
 
-        # ── Compatibility breakdown (text) ─────────────────────────────────────
+        # Eligibility breakdown
         st.markdown("### 🔍 Eligibility Breakdown")
         elig_col1, elig_col2 = st.columns(2)
-
         with elig_col1:
-            # GPA
             if user_gpa and req_gpa and user_gpa >= req_gpa:
                 st.success(
                     f"✅ **GPA** — {user_gpa} meets "
@@ -697,7 +971,6 @@ if (
             else:
                 st.info("ℹ️ **GPA** — Verify on official website.")
 
-            # Major
             if "all" in majors_lower:
                 st.success(
                     f"✅ **Major** — Open to all majors "
@@ -717,7 +990,6 @@ if (
                     f"be a primary target. Verify eligibility."
                 )
 
-            # Citizenship
             if s.get("requires_filipino_citizen"):
                 if p.get("is_filipino_citizen"):
                     st.success(
@@ -736,8 +1008,9 @@ if (
                 )
 
         with elig_col2:
-            # Level
-            user_level = p.get("level_seeking") or "undergraduate"
+            user_level = (
+                p.get("level_seeking") or "undergraduate"
+            )
             if user_level in s.get("level", []):
                 st.success(
                     f"✅ **Level** — Available for "
@@ -749,19 +1022,26 @@ if (
                     f"{user_level} students."
                 )
 
-            # Need-based
             if s.get("need_based"):
                 threshold = s.get("income_threshold")
                 user_income = p.get("income_ceiling")
-                if user_income and threshold and user_income <= threshold:
+                if (
+                    user_income
+                    and threshold
+                    and user_income <= threshold
+                ):
                     st.success(
-                        f"✅ **Need-based** — Your income "
-                        f"bracket qualifies."
+                        "✅ **Need-based** — Income bracket "
+                        "qualifies."
                     )
-                elif user_income and threshold and user_income > threshold:
+                elif (
+                    user_income
+                    and threshold
+                    and user_income > threshold
+                ):
                     st.error(
                         f"❌ **Need-based** — Income may exceed "
-                        f"the ₱{threshold:,}/month threshold."
+                        f"₱{threshold:,}/month threshold."
                     )
                 else:
                     st.info(
@@ -773,24 +1053,39 @@ if (
                     "✅ **Need-based** — Not income-restricted."
                 )
 
-            # Leadership
             if user_leadership and s.get("id") in [
-                "sm-foundation-it", "apc-leadership", "chevening"
+                "sm-foundation-it",
+                "apc-leadership",
+                "chevening",
             ]:
                 st.success(
-                    "✅ **Leadership** — Your leadership "
-                    "experience is a strong asset."
+                    "✅ **Leadership** — Strong asset for "
+                    "this scholarship."
                 )
             elif user_leadership:
                 st.info(
-                    "ℹ️ **Leadership** — Experience may "
-                    "strengthen your application."
+                    "ℹ️ **Leadership** — May strengthen "
+                    "your application."
                 )
             else:
                 st.warning(
                     "⚠️ **Leadership** — None entered. "
                     "Consider adding informal roles."
                 )
+
+        st.divider()
+
+        # Option C — AI strategic tips
+        if st.session_state.tips:
+            st.markdown(
+                "### 🎯 Your Personalized Application Tips"
+            )
+            for i, tip in enumerate(st.session_state.tips):
+                with st.container(border=True):
+                    st.markdown(
+                        f"**Tip {i+1}: {tip['title']}**"
+                    )
+                    st.markdown(tip["description"])
 
         st.divider()
 
@@ -806,17 +1101,18 @@ if (
         with det_col2:
             st.markdown(f"**Core values:** {s['core_values']}")
             if s.get("link") and s["link"].startswith("http"):
-                st.markdown(f"[🔗 Official website]({s['link']})")
+                st.markdown(
+                    f"[🔗 Official website]({s['link']})"
+                )
 
         st.divider()
-
         st.markdown("### ✍️ Essay Prompt to Prepare For")
         st.info(f'"{s["essay_prompt"]}"')
         st.divider()
 
         if st.button(
             "📋 Generate my step-by-step action plan",
-            type="primary"
+            type="primary",
         ):
             st.session_state.step = 4
             st.rerun()
@@ -830,7 +1126,7 @@ if (
 
     with st.expander(
         "Step 4 — Your application action plan",
-        expanded=True
+        expanded=True,
     ):
         st.markdown(f"## 📋 Action Plan: {s['name']}")
         st.caption(
@@ -856,7 +1152,6 @@ if (
             "4 milestones into Apple Calendar, Google Calendar, "
             "or Outlook."
         )
-
         ics_bytes = generate_timeline(s)
         st.download_button(
             label="📅 Download application timeline (.ics)",
