@@ -3,7 +3,7 @@ import json
 import os
 from openai import OpenAI
 
-# Import our new modular views
+# Import our modular views
 from views.step1_profile import render_step1
 from views.step2_matches import render_step2
 from views.step3_dashboard import render_step3
@@ -12,7 +12,7 @@ from views.step4_action import render_step4
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Iskolar.AI",
-    page_icon="Iskolar",
+    page_icon="🎓",
     layout="wide"
 )
 
@@ -40,6 +40,7 @@ defaults = {
     "rationale": None,
     "tips": None,
     "step": 1,
+    "preference_log": []  # Added memory log for agentic learning documentation
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -80,17 +81,20 @@ for i, (num, label) in enumerate(STEPS.items()):
     with step_cols[i]:
         if num < st.session_state.step:
             st.markdown(
-                f"<p style='text-align:center;color:#6C63FF;'>{label} (Done)</p>",
+                f"<p style='text-align:center;color:#6C63FF;'>"
+                f"{label} (Done)</p>",
                 unsafe_allow_html=True,
             )
         elif num == st.session_state.step:
             st.markdown(
-                f"<p style='text-align:center;font-weight:bold;'>-> {label} (Active)</p>",
+                f"<p style='text-align:center;font-weight:bold;'>"
+                f"-> {label} (Active)</p>",
                 unsafe_allow_html=True,
             )
         else:
             st.markdown(
-                f"<p style='text-align:center;color:gray;'>{label}</p>",
+                f"<p style='text-align:center;color:gray;'>"
+                f"{label}</p>",
                 unsafe_allow_html=True,
             )
 

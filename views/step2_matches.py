@@ -52,7 +52,11 @@ def render_step2(client):
                 with col2:
                     st.metric("AI Score", f"{score}/10 ({score_color})")
                     
+                    # Dashboard button (Updates memory log)
                     if st.button("View full dashboard", key=f"dashboard_{i}", type="primary"):
+                        if s['name'] not in st.session_state.preference_log:
+                            st.session_state.preference_log.append(s['name'])
+                        
                         st.session_state.selected_scholarship = s
                         st.session_state.step = 3
                         with st.spinner("Generating your personalized match analysis..."):
@@ -60,7 +64,11 @@ def render_step2(client):
                             st.session_state.tips = generate_application_tips(st.session_state.profile, s, client)
                         st.rerun()
                     
+                    # Action plan button (Updates memory log)
                     if st.button("View action plan", key=f"action_{i}"):
+                        if s['name'] not in st.session_state.preference_log:
+                            st.session_state.preference_log.append(s['name'])
+                            
                         st.session_state.selected_scholarship = s
                         st.session_state.step = 4
                         st.rerun()

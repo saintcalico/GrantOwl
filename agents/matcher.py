@@ -425,8 +425,11 @@ strength. Be honest — if a scholarship is borderline, say so."""
         )
 
         raw = response.choices[0].message.content.strip()
-        raw = raw.replace("```json", "").replace("
-```", "").strip()
+        
+        # Safely strip JSON block formatting without syntax errors
+        ticks = "```"
+        raw = raw.replace(f"{ticks}json", "").replace(ticks, "").strip()
+        
         rankings = json.loads(raw)
 
         ranked_map = {r["id"]: r for r in rankings}

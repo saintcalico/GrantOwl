@@ -1,10 +1,11 @@
 import streamlit as st
 from agents.extractor import (
     extract_from_form,
-    extract_from_resume_pdf,
-    extract_from_resume_image,
+    extract_profile_from_text,
 )
 from agents.matcher import match_scholarships
+import fitz  # PyMuPDF
+import base64
 
 def render_step1(client, scholarships):
     with st.expander("Step 1 — Tell us about yourself", expanded=(st.session_state.step == 1)):
@@ -47,16 +48,56 @@ def render_step1(client, scholarships):
                 if st.button("Extract my profile from resume", type="primary"):
                     file_bytes = uploaded_file.read()
                     file_type = uploaded_file.type
+                    extracted_text = ""
 
-                    with st.spinner("Reading your resume and extracting your profile..."):
-                        if file_type == "application/pdf":
-                            profile = extract_from_resume_pdf(file_bytes, client, level_override=level_seeking)
-                        else:
-                            profile = extract_from_resume_image(file_bytes, file_type, client, level_override=level_seeking)
+                    with st.spinner("Reading your resume and extracting your profile safely..."):
+                        try:
+                            if file_type == "application/pdf":
+                                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                                for page in doc:
+                                    extracted_text += page.get_text()
+                                doc.close()
+                            else:
+                                # For images, we use a basic vision pass to get the text first
+                                image_b64 = base64.b64encode(file_bytes).decode("utf-8")
+                                response = client.chat.completions.create(
+                                    model="gpt-4o-mini",
+                                    messages=[
+                                        {
+                                            "role": "user",
+                                            "content": [
+                                                {"type": "text", "text": "Extract all readable text from this image perfectly."},
+                                                {
+                                                    "type": "image_url",
+                                                    "image_url": {"url": f"data:{file_type};base64,{image_b64}"}
+                                                },
+                                            ],
+                                        }
+                                    ],
+                                    max_tokens=800,
+                                )
+                                extracted_text = response.choices[0].message.content
 
-                    if "error" in profile:
-                        st.error(f"Error: {profile['error']}")
+                            # Pass the raw text through our hardened defensive extractor
+                            profile = extract_profile_from_text(extracted_text, client)
+
+                        except Exception as e:
+                            profile = {"is_valid_resume": False, "rejection_reason": f"File processing failed: {str(e)}"}
+
+                    # Evaluate Guardrail Output
+                    if not profile.get("is_valid_resume"):
+                        st.error(
+                            f"Parsing Error: {profile.get('rejection_reason', 'The uploaded file could not be verified as a valid academic profile or resume.')}"
+                        )
+                        st.warning("Please upload a standard document layout or manually populate the entry form below.")
                     else:
+                        st.success("Document analyzed and parameters structuralized successfully!")
+                        # Ensure the correct level is enforced regardless of what the LLM inferred
+                        profile["level_seeking"] = level_seeking
+                        if is_graduate:
+                            profile["enrollment_status"] = "graduate applicant"
+                            profile["year_level"] = "Graduate"
+                        
                         st.session_state.profile = profile
                         with st.spinner("Searching for your best scholarship matches..."):
                             results, source = match_scholarships(st.session_state.profile, scholarships, client)
