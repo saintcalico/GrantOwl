@@ -19,7 +19,7 @@ from agents.timeline import generate_timeline, generate_application_steps
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Iskolar.AI",
-    page_icon="🎓",
+    page_icon="Iskolar",
     layout="wide"
 )
 
@@ -33,7 +33,7 @@ if not api_key:
 
 if not api_key:
     st.error(
-        "⚠️ Missing OPENAI_API_KEY. "
+        "Error: Missing OPENAI_API_KEY. "
         "Please add it to your Codespace secrets and restart."
     )
     st.stop()
@@ -67,13 +67,13 @@ scholarships = load_scholarships()
 
 # ── Progress indicator ─────────────────────────────────────────────────────────
 STEPS = {
-    1: "📝 Your Profile",
-    2: "🎯 Matches",
-    3: "📊 Best Match",
-    4: "📋 Action Plan",
+    1: "Your Profile",
+    2: "Matches",
+    3: "Best Match",
+    4: "Action Plan",
 }
 
-st.title("🎓 Iskolar.AI")
+st.title("Iskolar.AI")
 st.caption(
     "Your AI-powered scholarship adviser "
     "— session only, nothing is saved."
@@ -88,19 +88,19 @@ for i, (num, label) in enumerate(STEPS.items()):
         if num < st.session_state.step:
             st.markdown(
                 f"<p style='text-align:center;color:#6C63FF;'>"
-                f"✅ {label}</p>",
+                f"{label} (Done)</p>",
                 unsafe_allow_html=True,
             )
         elif num == st.session_state.step:
             st.markdown(
                 f"<p style='text-align:center;font-weight:bold;'>"
-                f"▶️ {label}</p>",
+                f"-> {label} (Active)</p>",
                 unsafe_allow_html=True,
             )
         else:
             st.markdown(
                 f"<p style='text-align:center;color:gray;'>"
-                f"⬜ {label}</p>",
+                f"{label}</p>",
                 unsafe_allow_html=True,
             )
 
@@ -123,22 +123,22 @@ with st.expander(
         input_method = st.radio(
             "How would you like to provide your information?",
             [
-                "📄 Upload my resume (PDF or image)",
-                "📝 Fill a structured form",
+                "Upload my resume (PDF or image)",
+                "Fill a structured form",
             ],
             horizontal=True,
         )
     else:
-        input_method = "📝 Fill a structured form"
+        input_method = "Fill a structured form"
 
     st.divider()
 
     # ── Resume upload path (graduate only) ────────────────────────────────────
     if (
         is_graduate
-        and input_method == "📄 Upload my resume (PDF or image)"
+        and input_method == "Upload my resume (PDF or image)"
     ):
-        st.markdown("#### 📄 Resume Upload")
+        st.markdown("#### Resume Upload")
         st.caption(
             "Upload your undergraduate resume or CV. "
             "Accepted: PDF, JPG, PNG. "
@@ -154,12 +154,12 @@ with st.expander(
 
         if uploaded_file:
             st.success(
-                f"✅ {uploaded_file.name} "
+                f"File uploaded: {uploaded_file.name} "
                 f"({uploaded_file.size // 1024} KB)"
             )
 
             if st.button(
-                "🔍 Extract my profile from resume",
+                "Extract my profile from resume",
                 type="primary",
             ):
                 file_bytes = uploaded_file.read()
@@ -184,7 +184,7 @@ with st.expander(
                         )
 
                 if "error" in profile:
-                    st.error(f"❌ {profile['error']}")
+                    st.error(f"Error: {profile['error']}")
                 else:
                     st.session_state.profile = profile
                     with st.spinner(
@@ -196,8 +196,8 @@ with st.expander(
                             scholarships,
                             client,
                         )
-                        st.session_state.matches = results
-                        st.session_state.match_source = source
+                    st.session_state.matches = results
+                    st.session_state.match_source = source
                     st.session_state.step = 2
                     st.rerun()
 
@@ -209,7 +209,7 @@ with st.expander(
         )
 
         # ── Section A: Personal Information ───────────────────────────────────
-        st.markdown("#### 🧑 Personal Information")
+        st.markdown("#### Personal Information")
         col1, col2 = st.columns(2)
         with col1:
             name = st.text_input(
@@ -219,15 +219,16 @@ with st.expander(
                 "School / University",
                 placeholder="Asia Pacific College",
             )
-            school_type = st.selectbox(
-                "School type",
-                [
-                    "",
-                    "Private",
-                    "Public",
-                    "State University (SUC)",
-                ],
-            )
+            if not is_graduate:
+                school_type = st.selectbox(
+                    "School type",
+                    ["", "Private", "Public"],
+                )
+            else:
+                school_type = st.selectbox(
+                    "School type",
+                    ["", "Private", "Public", "State University (SUC)"],
+                )
         with col2:
             is_filipino_citizen = st.toggle(
                 "I am a Filipino citizen", value=True
@@ -263,40 +264,10 @@ with st.expander(
         st.divider()
 
         # ── Section B: Academic Information ───────────────────────────────────
-        st.markdown("#### 📚 Academic Information")
+        st.markdown("#### Academic Information")
         col3, col4 = st.columns(2)
         with col3:
-            program_track = st.selectbox(
-                "Program track",
-                [
-                    "",
-                    "STEM",
-                    "Business",
-                    "Arts & Humanities",
-                    "Education",
-                    "Health Sciences",
-                ],
-            )
-            major = st.text_input(
-                "Degree / Major",
-                placeholder=(
-                    "BS Information Technology"
-                    if not is_graduate
-                    else "MS Computer Science"
-                ),
-            )
-        with col4:
             if not is_graduate:
-                year_level = st.selectbox(
-                    "Year level",
-                    [
-                        "",
-                        "1st Year",
-                        "2nd Year",
-                        "3rd Year",
-                        "4th Year",
-                    ],
-                )
                 enrollment_status = st.selectbox(
                     "Enrollment status",
                     [
@@ -306,27 +277,76 @@ with st.expander(
                     ],
                 )
             else:
-                year_level = "Graduate"
                 enrollment_status = "Graduate Applicant"
+
+            major_label = "Desired / Intended Major" if enrollment_status == "Incoming Freshman" else "Degree / Major"
+            major_placeholder = "BS Information Technology" if not is_graduate else "MS Computer Science"
+            major = st.text_input(major_label, placeholder=major_placeholder)
+
+            if not is_graduate and enrollment_status == "Incoming Freshman":
+                program_track = st.selectbox(
+                    "Senior High School Program Track",
+                    [
+                        "",
+                        "STEM (Science, Technology, Engineering, and Mathematics)",
+                        "ABM (Accountancy, Business, and Management)",
+                        "HUMSS (Humanities and Social Sciences)",
+                        "GAS (General Academic Strand)",
+                        "TVL (Technical-Vocational-Livelihood)",
+                        "Sports Track",
+                        "Arts and Design Track",
+                    ],
+                )
+            else:
+                program_track = ""
+            
+        with col4:
+            if not is_graduate:
+                if enrollment_status != "Incoming Freshman":
+                    year_level = st.selectbox(
+                        "Year level",
+                        [
+                            "",
+                            "1st Year",
+                            "2nd Year",
+                            "3rd Year",
+                            "4th Year",
+                        ],
+                    )
+                else:
+                    year_level = ""
+            else:
+                year_level = "Graduate"
                 st.info(
-                    "📌 Graduate applicant — year level "
+                    "Note: Graduate applicant — year level "
                     "set automatically."
                 )
 
-            gpa_input = st.number_input(
-                "GPA (100-point scale)",
-                min_value=0.0,
-                max_value=100.0,
-                value=0.0,
-                step=0.1,
-                format="%.2f",
-            )
-            gpa = gpa_input if gpa_input > 0 else None
+            if not is_graduate:
+                gpa_input = st.number_input(
+                    "GPA (100-point scale)",
+                    min_value=0,
+                    max_value=100,
+                    value=0,
+                    step=1,
+                )
+                st.caption("Enter your grade as a whole number percentage (e.g., 92).")
+                gpa = float(gpa_input) if gpa_input > 0 else None
+            else:
+                gpa_input = st.number_input(
+                    "GPA",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=0.0,
+                    step=0.1,
+                    format="%.2f",
+                )
+                gpa = gpa_input if gpa_input > 0 else None
 
         # Graduate-specific fields
         if is_graduate:
             st.divider()
-            st.markdown("#### 🎓 Graduate-Specific Information")
+            st.markdown("#### Graduate-Specific Information")
             col_g1, col_g2 = st.columns(2)
             with col_g1:
                 undergraduate_degree = st.text_input(
@@ -360,7 +380,7 @@ with st.expander(
         st.divider()
 
         # ── Section C: Financial Information ──────────────────────────────────
-        st.markdown("#### 💰 Financial Information")
+        st.markdown("#### Financial Information")
         st.caption(
             "Used only to match need-based scholarships. "
             "Nothing is stored."
@@ -386,7 +406,7 @@ with st.expander(
         st.divider()
 
         # ── Section D: Household Information ──────────────────────────────────
-        st.markdown("#### 🏠 Household Information")
+        st.markdown("#### Household Information")
         st.caption(
             "This helps match scholarships that consider "
             "family context and financial need."
@@ -448,7 +468,7 @@ with st.expander(
         st.divider()
 
         # ── Section E: Skills ──────────────────────────────────────────────────
-        st.markdown("#### 💡 Skills")
+        st.markdown("#### Skills")
         skills_text = st.text_area(
             "Do you have any skills you'd like to mention? "
             "(optional)",
@@ -463,10 +483,10 @@ with st.expander(
         st.divider()
 
         # ── Section F: Leadership & Extracurricular ────────────────────────────
-        st.markdown("#### 🏆 Leadership & Extracurricular")
+        st.markdown("#### Leadership & Extracurricular")
         col7, col8 = st.columns(2)
         with col7:
-            leadership_roles = st.multiselect(
+            leadership_roles_selected = st.multiselect(
                 "Leadership roles",
                 [
                     "Student Organization Officer",
@@ -475,9 +495,16 @@ with st.expander(
                     "Volunteer / Community Worker",
                     "Event Organizer",
                     "None",
+                    "Others"
                 ],
                 placeholder="Select your roles...",
             )
+            
+            if "Others" in leadership_roles_selected:
+                leadership_other_text = st.text_input("Specify other leadership roles")
+            else:
+                leadership_other_text = ""
+                
             leadership_text = st.text_area(
                 "Describe your leadership or community involvement",
                 placeholder=(
@@ -487,7 +514,7 @@ with st.expander(
                 height=80,
             )
         with col8:
-            extracurricular_focus = st.multiselect(
+            extracurricular_focus_selected = st.multiselect(
                 "Extracurricular focus",
                 [
                     "Community Service",
@@ -497,9 +524,16 @@ with st.expander(
                     "Tech Competitions",
                     "Entrepreneurship",
                     "Environmental Advocacy",
+                    "Others"
                 ],
                 placeholder="Select your focus areas...",
             )
+            
+            if "Others" in extracurricular_focus_selected:
+                extracurricular_other_text = st.text_input("Specify other extracurricular focus")
+            else:
+                extracurricular_other_text = ""
+                
             goals = st.selectbox(
                 "Primary scholarship goal",
                 [
@@ -513,14 +547,18 @@ with st.expander(
             )
 
         st.divider()
+        st.caption(
+            "Reminder: It is highly advisable to do your own research and not solely rely on this AI agent. "
+            "Always verify details on the official scholarship websites."
+        )
 
-        if st.button("🔍 Find my scholarships", type="primary"):
+        if st.button("Find my scholarships", type="primary"):
             missing = []
             if not major.strip():
                 missing.append("Degree / Major")
-            if not program_track:
+            if not is_graduate and enrollment_status == "Incoming Freshman" and not program_track:
                 missing.append("Program track")
-            if not is_graduate and not year_level:
+            if not is_graduate and enrollment_status != "Incoming Freshman" and not year_level:
                 missing.append("Year level")
             if not region:
                 missing.append("Region")
@@ -532,6 +570,14 @@ with st.expander(
                     f"Please fill in: {', '.join(missing)}"
                 )
             else:
+                leadership_roles = [r for r in leadership_roles_selected if r != "Others"]
+                if leadership_other_text:
+                    leadership_roles.append(leadership_other_text)
+                    
+                extracurricular_focus = [r for r in extracurricular_focus_selected if r != "Others"]
+                if extracurricular_other_text:
+                    extracurricular_focus.append(extracurricular_other_text)
+                    
                 form_data = {
                     "name": name,
                     "school": school,
@@ -582,7 +628,7 @@ with st.expander(
 
                     if not st.session_state.profile.get("gpa"):
                         st.warning(
-                            "⚠️ No GPA entered — scholarships with "
+                            "Warning: No GPA entered — scholarships with "
                             "GPA requirements may still appear. "
                             "Verify eligibility carefully."
                         )
@@ -597,7 +643,7 @@ with st.expander(
                     st.session_state.step = 2
                     st.rerun()
 
-# ── STEP 2: Top 3 Matches ──────────────────────────────────────────────────────
+# ── STEP 2: Top 5 Matches ──────────────────────────────────────────────────────
 if st.session_state.matches:
     with st.expander(
         "Step 2 — Your top scholarship matches",
@@ -605,18 +651,18 @@ if st.session_state.matches:
     ):
         if st.session_state.match_source == "live":
             st.success(
-                "🌐 Live results — sourced from real-time "
+                "Live results — sourced from real-time "
                 "web search via Tavily, ranked by AI adviser."
             )
         else:
             st.warning(
-                "📁 Showing curated local results — "
+                "Showing curated local results — "
                 "live search unavailable. Ranked by AI adviser."
             )
 
         # Comparison bar chart
         if len(st.session_state.matches) > 1:
-            st.markdown("### 📊 How your top matches compare")
+            st.markdown("### How your top matches compare")
             names = [
                 s["name"][:30] + "..."
                 if len(s["name"]) > 30
@@ -627,7 +673,7 @@ if st.session_state.matches:
                 s["match_score"]
                 for s in st.session_state.matches
             ]
-            colors = ["#6C63FF", "#A89CF7", "#D4D0FA"]
+            colors = ["#6C63FF", "#8B84FF", "#A89CF7", "#C5BEFF", "#D4D0FA"]
 
             fig_compare = go.Figure(go.Bar(
                 x=names,
@@ -655,11 +701,11 @@ if st.session_state.matches:
         for i, s in enumerate(st.session_state.matches):
             score = s["match_score"]
             score_color = (
-                "🟢" if score >= 7
-                else "🟡" if score >= 4
-                else "🔴"
+                "High" if score >= 7
+                else "Medium" if score >= 4
+                else "Low"
             )
-            badge = "🏅 Best Match" if i == 0 else f"#{i + 1}"
+            badge = "Best Match" if i == 0 else f"#{i + 1}"
 
             with st.container(border=True):
                 col1, col2 = st.columns([3, 1])
@@ -678,55 +724,55 @@ if st.session_state.matches:
                     )
                     if s.get("adviser_note"):
                         st.info(
-                            f"💡 **Adviser:** {s['adviser_note']}"
+                            f"Adviser: {s['adviser_note']}"
                         )
                     if (
                         s.get("link")
                         and s["link"].startswith("http")
                     ):
                         st.markdown(
-                            f"[🔗 View scholarship]({s['link']})"
+                            f"[View scholarship]({s['link']})"
                         )
                 with col2:
                     st.metric(
                         "AI Score",
-                        f"{score_color} {score}/10",
+                        f"{score}/10 ({score_color})",
                     )
-                    if i == 0:
-                        if st.button(
-                            "📊 View full dashboard",
-                            key=f"dashboard_{i}",
-                            type="primary",
+                    
+                    if st.button(
+                        "View full dashboard",
+                        key=f"dashboard_{i}",
+                        type="primary",
+                    ):
+                        st.session_state.selected_scholarship = s
+                        st.session_state.step = 3
+                        with st.spinner(
+                            "Generating your personalized "
+                            "match analysis..."
                         ):
-                            st.session_state.selected_scholarship = s
-                            st.session_state.step = 3
-                            with st.spinner(
-                                "Generating your personalized "
-                                "match analysis..."
-                            ):
-                                st.session_state.rationale = (
-                                    generate_match_rationale(
-                                        st.session_state.profile,
-                                        s,
-                                        client,
-                                    )
+                            st.session_state.rationale = (
+                                generate_match_rationale(
+                                    st.session_state.profile,
+                                    s,
+                                    client,
                                 )
-                                st.session_state.tips = (
-                                    generate_application_tips(
-                                        st.session_state.profile,
-                                        s,
-                                        client,
-                                    )
+                            )
+                            st.session_state.tips = (
+                                generate_application_tips(
+                                    st.session_state.profile,
+                                    s,
+                                    client,
                                 )
-                            st.rerun()
-                    else:
-                        if st.button(
-                            "📋 View action plan",
-                            key=f"action_{i}",
-                        ):
-                            st.session_state.selected_scholarship = s
-                            st.session_state.step = 4
-                            st.rerun()
+                            )
+                        st.rerun()
+                    
+                    if st.button(
+                        "View action plan",
+                        key=f"action_{i}",
+                    ):
+                        st.session_state.selected_scholarship = s
+                        st.session_state.step = 4
+                        st.rerun()
 
 # ── STEP 3: Best Match Dashboard ──────────────────────────────────────────────
 if (
@@ -740,12 +786,12 @@ if (
         "Step 3 — Why this is your best match",
         expanded=(st.session_state.step == 3),
     ):
-        st.markdown(f"## 🏅 {s['name']}")
+        st.markdown(f"## {s['name']}")
         st.caption(f"{s['provider']} · {s['type'].capitalize()}")
 
         if st.session_state.rationale:
             st.info(
-                f"💬 **Your AI Adviser says:** "
+                f"**Your AI Adviser says:** "
                 f"{st.session_state.rationale}"
             )
 
@@ -753,7 +799,7 @@ if (
 
         # Radar chart
         st.markdown(
-            "### 🕸️ Your Profile vs. Scholarship Requirements"
+            "### Your Profile vs. Scholarship Requirements"
         )
         user_gpa = p.get("gpa") or 0
         req_gpa = s.get("gpa_required") or 0
@@ -845,7 +891,7 @@ if (
         st.divider()
 
         # Horizontal bar chart
-        st.markdown("### 📊 Match Score Breakdown")
+        st.markdown("### Match Score Breakdown")
         criteria_labels = [
             "GPA Fit", "Major Fit", "Skills",
             "Leadership", "Extracurricular",
@@ -882,7 +928,7 @@ if (
         st.divider()
 
         # Deadline urgency timeline
-        st.markdown("### ⏳ Time Until Deadline")
+        st.markdown("### Time Until Deadline")
         deadline_str = s.get("deadline", "")
         try:
             deadline_dt = datetime.strptime(
@@ -901,12 +947,12 @@ if (
                 else "#6C63FF"
             )
             urgency_label = (
-                f"🔴 {days_left} days left — Act now!"
+                f"{days_left} days left — Act now!"
                 if days_left < 21
-                else f"🟡 {days_left} days left — Start preparing"
+                else f"{days_left} days left — Start preparing"
                 if days_left < 42
                 else (
-                    f"🟢 {days_left} days left "
+                    f"{days_left} days left "
                     f"— Good time to start"
                 )
             )
@@ -948,32 +994,32 @@ if (
             )
         except ValueError:
             st.info(
-                "ℹ️ Deadline not available — check the official "
+                "Info: Deadline not available — check the official "
                 "website for the exact date."
             )
 
         st.divider()
 
         # Eligibility breakdown
-        st.markdown("### 🔍 Eligibility Breakdown")
+        st.markdown("### Eligibility Breakdown")
         elig_col1, elig_col2 = st.columns(2)
         with elig_col1:
             if user_gpa and req_gpa and user_gpa >= req_gpa:
                 st.success(
-                    f"✅ **GPA** — {user_gpa} meets "
+                    f"Pass: **GPA** — {user_gpa} meets "
                     f"the {req_gpa} minimum."
                 )
             elif user_gpa and req_gpa and user_gpa < req_gpa:
                 st.error(
-                    f"❌ **GPA** — {user_gpa} is below "
+                    f"Fail: **GPA** — {user_gpa} is below "
                     f"the {req_gpa} minimum."
                 )
             else:
-                st.info("ℹ️ **GPA** — Verify on official website.")
+                st.info("Info: **GPA** — Verify on official website.")
 
             if "all" in majors_lower:
                 st.success(
-                    f"✅ **Major** — Open to all majors "
+                    f"Pass: **Major** — Open to all majors "
                     f"including {p.get('major')}."
                 )
             elif any(
@@ -981,29 +1027,29 @@ if (
                 for m in majors_lower
             ):
                 st.success(
-                    f"✅ **Major** — {p.get('major')} "
+                    f"Pass: **Major** — {p.get('major')} "
                     f"is a priority field."
                 )
             else:
                 st.warning(
-                    f"⚠️ **Major** — {p.get('major')} may not "
+                    f"Warning: **Major** — {p.get('major')} may not "
                     f"be a primary target. Verify eligibility."
                 )
 
             if s.get("requires_filipino_citizen"):
                 if p.get("is_filipino_citizen"):
                     st.success(
-                        "✅ **Citizenship** — Filipino citizen "
+                        "Pass: **Citizenship** — Filipino citizen "
                         "requirement met."
                     )
                 else:
                     st.error(
-                        "❌ **Citizenship** — Filipino citizen "
+                        "Fail: **Citizenship** — Filipino citizen "
                         "required."
                     )
             else:
                 st.success(
-                    "✅ **Citizenship** — No citizenship "
+                    "Pass: **Citizenship** — No citizenship "
                     "restriction."
                 )
 
@@ -1013,12 +1059,12 @@ if (
             )
             if user_level in s.get("level", []):
                 st.success(
-                    f"✅ **Level** — Available for "
+                    f"Pass: **Level** — Available for "
                     f"{user_level} students."
                 )
             else:
                 st.error(
-                    f"❌ **Level** — May not be available for "
+                    f"Fail: **Level** — May not be available for "
                     f"{user_level} students."
                 )
 
@@ -1031,7 +1077,7 @@ if (
                     and user_income <= threshold
                 ):
                     st.success(
-                        "✅ **Need-based** — Income bracket "
+                        "Pass: **Need-based** — Income bracket "
                         "qualifies."
                     )
                 elif (
@@ -1040,17 +1086,17 @@ if (
                     and user_income > threshold
                 ):
                     st.error(
-                        f"❌ **Need-based** — Income may exceed "
+                        f"Fail: **Need-based** — Income may exceed "
                         f"₱{threshold:,}/month threshold."
                     )
                 else:
                     st.info(
-                        "ℹ️ **Need-based** — Verify income "
+                        "Info: **Need-based** — Verify income "
                         "requirements on official page."
                     )
             else:
                 st.success(
-                    "✅ **Need-based** — Not income-restricted."
+                    "Pass: **Need-based** — Not income-restricted."
                 )
 
             if user_leadership and s.get("id") in [
@@ -1059,26 +1105,31 @@ if (
                 "chevening",
             ]:
                 st.success(
-                    "✅ **Leadership** — Strong asset for "
+                    "Pass: **Leadership** — Strong asset for "
                     "this scholarship."
                 )
             elif user_leadership:
                 st.info(
-                    "ℹ️ **Leadership** — May strengthen "
+                    "Info: **Leadership** — May strengthen "
                     "your application."
                 )
             else:
                 st.warning(
-                    "⚠️ **Leadership** — None entered. "
+                    "Warning: **Leadership** — None entered. "
                     "Consider adding informal roles."
                 )
 
+        st.divider()
+        st.caption(
+            "Reminder: It is highly advisable to do your own research and not solely rely on this AI agent. "
+            "Always verify details on the official scholarship websites."
+        )
         st.divider()
 
         # Option C — AI strategic tips
         if st.session_state.tips:
             st.markdown(
-                "### 🎯 Your Personalized Application Tips"
+                "### Your Personalized Application Tips"
             )
             for i, tip in enumerate(st.session_state.tips):
                 with st.container(border=True):
@@ -1090,7 +1141,7 @@ if (
         st.divider()
 
         # Scholarship details
-        st.markdown("### 📋 Scholarship Details")
+        st.markdown("### Scholarship Details")
         det_col1, det_col2 = st.columns(2)
         with det_col1:
             st.markdown(f"**Benefits:** {s['benefits']}")
@@ -1102,16 +1153,16 @@ if (
             st.markdown(f"**Core values:** {s['core_values']}")
             if s.get("link") and s["link"].startswith("http"):
                 st.markdown(
-                    f"[🔗 Official website]({s['link']})"
+                    f"[Official website]({s['link']})"
                 )
 
         st.divider()
-        st.markdown("### ✍️ Essay Prompt to Prepare For")
+        st.markdown("### Essay Prompt to Prepare For")
         st.info(f'"{s["essay_prompt"]}"')
         st.divider()
 
         if st.button(
-            "📋 Generate my step-by-step action plan",
+            "Generate my step-by-step action plan",
             type="primary",
         ):
             st.session_state.step = 4
@@ -1128,7 +1179,7 @@ if (
         "Step 4 — Your application action plan",
         expanded=True,
     ):
-        st.markdown(f"## 📋 Action Plan: {s['name']}")
+        st.markdown(f"## Action Plan: {s['name']}")
         st.caption(
             "Follow these steps to complete your application. "
             "Download the calendar file to set reminders."
@@ -1139,14 +1190,14 @@ if (
         for step in steps:
             with st.container(border=True):
                 st.markdown(
-                    f"### {step['icon']} Step {step['number']} "
+                    f"### Step {step['number']} "
                     f"— {step['title']}"
                 )
                 st.markdown(step["description"])
 
         st.divider()
 
-        st.markdown("### 📅 Add milestones to your calendar")
+        st.markdown("### Add milestones to your calendar")
         st.caption(
             "Download the .ics file and open it to import all "
             "4 milestones into Apple Calendar, Google Calendar, "
@@ -1154,7 +1205,7 @@ if (
         )
         ics_bytes = generate_timeline(s)
         st.download_button(
-            label="📅 Download application timeline (.ics)",
+            label="Download application timeline (.ics)",
             data=ics_bytes,
             file_name=f"timeline_{s['id']}.ics",
             mime="text/calendar",
@@ -1163,7 +1214,7 @@ if (
 
     st.divider()
     st.caption(
-        "🔒 Privacy notice: No personal information entered in "
+        "Privacy notice: No personal information entered in "
         "this session is stored or transmitted beyond OpenAI's API. "
         "All data clears when you close this tab."
     )

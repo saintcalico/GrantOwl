@@ -55,9 +55,13 @@ def _passes_hard_filters(
             f"Enrollment status '{user_enrollment}' not eligible"
         )
 
-    # STEM requirement
-    if scholarship.get("requires_stem") and user_track != "STEM":
-        return False, "STEM program required"
+    # STEM requirement safely adjusted to handle long SHS tracks & college majors
+    if scholarship.get("requires_stem"):
+        has_stem_track = "STEM" in user_track
+        major_upper = (profile.get("major") or "").upper()
+        has_stem_major = any(kw in major_upper for kw in ["ENGINEERING", "TECHNOLOGY", "SCIENCE", "MATHEMATICS", "COMPUTER", "IT", "HEALTH", "MEDICINE", "NURSING"])
+        if not (has_stem_track or has_stem_major):
+            return False, "STEM program required"
 
     # Citizenship requirement
     if (
@@ -134,7 +138,7 @@ def _build_tavily_queries(profile: dict) -> list[str]:
     )
     if income and "Below" in income:
         query_b += " financial assistance need-based"
-    if track == "STEM":
+    if "STEM" in track:
         query_b += " STEM science technology"
     if school:
         query_b += f" {school}"
@@ -421,7 +425,8 @@ strength. Be honest — if a scholarship is borderline, say so."""
         )
 
         raw = response.choices[0].message.content.strip()
-        raw = raw.replace("```json", "").replace("```", "").strip()
+        raw = raw.replace("```json", "").replace("
+```", "").strip()
         rankings = json.loads(raw)
 
         ranked_map = {r["id"]: r for r in rankings}
@@ -469,10 +474,10 @@ def match_scholarships(
     Layer 1: Hard filter static scholarships.
     Layer 2: Tavily live search + URL quality filter + level filter.
     Layer 3: Merge static + live candidates.
-    Layer 4: OpenAI ranks and reasons about final top 3.
+    Layer 4: OpenAI ranks and reasons about final top 5.
 
     Returns:
-        (top 3 ranked scholarships, source: 'live' | 'fallback')
+        (top 5 ranked scholarships, source: 'live' | 'fallback')
     """
     # Static hard filtering
     static_candidates = []
@@ -526,15 +531,15 @@ def match_scholarships(
     if not all_candidates:
         return [], source
 
-    # Pass top 8 to OpenAI for reasoning
+    # Pass top 10 to OpenAI for reasoning
     top_candidates = sorted(
         all_candidates,
         key=lambda x: x["match_score"],
         reverse=True,
-    )[:8]
+    )[:10]
 
     ranked = _openai_rank_scholarships(
         profile, top_candidates, client
     )
 
-    return ranked[:3], source
+    return ranked[:5], source

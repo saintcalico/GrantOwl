@@ -86,15 +86,15 @@ def generate_application_steps(scholarship: dict) -> list[dict]:
         deadline_display = deadline.strftime("%B %d, %Y")
         weeks_left = (deadline - datetime.now()).days // 7
         urgency = (
-            "🔴 Urgent — less than 3 weeks left!"
+            "Urgent — less than 3 weeks left!"
             if weeks_left < 3
-            else f"🟡 {weeks_left} weeks until deadline"
+            else f"{weeks_left} weeks until deadline"
             if weeks_left < 6
-            else f"🟢 {weeks_left} weeks until deadline — good time to start"
+            else f"{weeks_left} weeks until deadline — good time to start"
         )
     except ValueError:
         deadline_display = "Check official website"
-        urgency = "⚪ Verify the deadline on the official website"
+        urgency = "Verify the deadline on the official website"
 
     steps = [
         {
@@ -107,7 +107,7 @@ def generate_application_steps(scholarship: dict) -> list[dict]:
                 f"Eligible levels: **{', '.join(scholarship['level']).capitalize()}**. "
                 f"Eligible majors: **{', '.join(scholarship['majors'])}**."
             ),
-            "icon": "✅",
+            "icon": "",
         },
         {
             "number": 2,
@@ -118,7 +118,7 @@ def generate_application_steps(scholarship: dict) -> list[dict]:
                 "checklist. Confirm the deadline and look for any additional "
                 "eligibility conditions not listed here."
             ),
-            "icon": "🌐",
+            "icon": "",
         },
         {
             "number": 3,
@@ -129,7 +129,7 @@ def generate_application_steps(scholarship: dict) -> list[dict]:
                 "and provide them with a brief summary of the scholarship "
                 "and why you are applying."
             ),
-            "icon": "📬",
+            "icon": "",
         },
         {
             "number": 4,
@@ -140,7 +140,7 @@ def generate_application_steps(scholarship: dict) -> list[dict]:
                 "and any proof of income or family background if required "
                 "by this scholarship."
             ),
-            "icon": "📁",
+            "icon": "",
         },
         {
             "number": 5,
@@ -153,7 +153,7 @@ def generate_application_steps(scholarship: dict) -> list[dict]:
                 "Aim for 300–500 words and have someone review it before "
                 "submitting."
             ),
-            "icon": "✍️",
+            "icon": "",
         },
         {
             "number": 6,
@@ -165,7 +165,7 @@ def generate_application_steps(scholarship: dict) -> list[dict]:
                 "time to resolve any technical issues or missing "
                 "documents."
             ),
-            "icon": "🚀",
+            "icon": "",
         },
     ]
 
