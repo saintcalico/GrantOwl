@@ -1,8 +1,6 @@
 # GrantOwl: An Agentic AI Scholarship Adviser 🇵🇭
 
-> "Transform tedious scholarship searches into data-driven, strategic action plans with automated profile parsing, dual-layer validation, and real-time web discovery."
-
-**GrantOwl** is an intelligent, autonomous academic agent engineered specifically to bridge the educational accessibility gap for Filipino students. Unlike passive listing archives or conventional search engines, GrantOwl securely processes unstructured student resumes or manual application forms, neutralizes security vulnerabilities at the perimeter, evaluates baseline qualifications against hard-coded deterministic rules, and leverages live web search tools to match students with active 2026 scholarship opportunities.
+**GrantOwl** is an academic agent engineered specifically to bridge the educational accessibility gap for Filipino students. Unlike passive listing archives or conventional search engines, GrantOwl securely processes unstructured student resumes or manual application forms, neutralizes security vulnerabilities at the perimeter, evaluates baseline qualifications against hard-coded deterministic rules, and leverages live web search tools to match students with active 2026 scholarship opportunities.
 
 ---
 
