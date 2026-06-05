@@ -3,8 +3,17 @@ headless = true
 port = 8501
 
 [theme]
-primaryColor = "#6C63FF"
-backgroundColor = "#0F1117"
-secondaryBackgroundColor = "#1A1D2E"
-textColor = "#FAFAFA"
+# Primary brand accent color (The rich blue-teal from the graduation cap)
+primaryColor = "#2C7A7B"
+
+# Deep background layer color (The soft warm white from the logo background)
+backgroundColor = "#FDFBF7"
+
+# Card, sidebar, and sub-container accent color (The light cream tint)
+secondaryBackgroundColor = "#F4EFE6"
+
+# Primary text color for high contrast readability (Charcoal dark grey)
+textColor = "#2D3748"
+
 font = "sans serif"
+base = "light"
